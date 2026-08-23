@@ -9,6 +9,11 @@ const commandFiles = fs.readdirSync(__dirname).filter(file => file !== 'index.js
 for (const file of commandFiles) {
   const command = require(`./${file}`);
   commands[command.name] = command;
+  if (command.aliases && Array.isArray(command.aliases)) {
+    for (const alias of command.aliases) {
+      commands[alias] = command;
+    }
+  }
   console.log(`[Commands] Loaded command: ${command.name}`);
 }
 
@@ -41,7 +46,7 @@ async function handleMessage(client, message) {
   const text = body.replace(/@\S+/g, '').trim();
   const textLower = text.toLowerCase();
 
-  // --- 1. Prefix command parsing (e.g. !fixtures Arsenal, !player Wirtz) ---
+  // --- 1. Prefix command parsing (e.g. !fixtures Arsenal, !player Wirtz, !rank sahl) ---
   if (text.startsWith(config.prefix)) {
     const parts = text.slice(config.prefix.length).trim().split(/ +/);
     const commandName = parts.shift().toLowerCase();
@@ -79,6 +84,14 @@ async function handleMessage(client, message) {
     const teamWords = textLower.split(/ +/).filter(w => !noiseWords.has(w) && w.length > 0);
     await commands['fixtures'].execute(client, message, teamWords);
   }
+  else if (textLower.includes('rank') || textLower.includes('league') || textLower.includes('standings') || textLower.includes('ترتيب') || textLower.includes('الدوري')) {
+    const keywords = new Set([
+      'rank', 'league', 'standings', 'points', 'for', 'in', 'show', 'get',
+      'what', 'is', 'my', 'the', 'of', 'who', 'score', 'ترتيب', 'الدوري', 'نقاط', 'في'
+    ]);
+    const query = textLower.split(/ +/).filter(w => !keywords.has(w) && w.length > 0);
+    await commands['league'].execute(client, message, query);
+  }
   else if (textLower.includes('player') || textLower.includes('stats') || textLower.includes('search') || textLower.includes('who is') || textLower.includes("who's")) {
     const keywords = new Set(['player', 'stats', 'search', 'who', 'is', 'for', 'show', 'details', 'find', "who's"]);
     const playerQuery = textLower.split(/ +/).filter(w => !keywords.has(w) && w.length > 0);
@@ -95,6 +108,8 @@ async function handleMessage(client, message) {
       `• _"when is the deadline?"_\n` +
       `• _"fixtures for Chelsea"_ or \`!fixtures Chelsea\`\n` +
       `• _"stats for Haaland"_ or \`!player Haaland\`\n` +
+      `• _"rank for sahl"_ or \`!rank sahl\`\n` +
+      `• \`!league\` — to view league standings\n` +
       `• \`!help\` — to see all commands`
     );
   }

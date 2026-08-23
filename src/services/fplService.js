@@ -192,5 +192,47 @@ module.exports = {
   async getTeamsList() {
     const data = await getBootstrapData();
     return data.teams.map(t => ({ id: t.id, name: t.name, short: t.short_name }));
+  },
+
+  async getLeagueStandings(leagueId = config.leagueId) {
+    try {
+      const url = `${FPL_BASE}/leagues-classic/${leagueId}/standings/`;
+      const response = await axios.get(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      });
+      return {
+        league: response.data.league,
+        standings: response.data.standings.results,
+        hasNext: response.data.standings.has_next,
+        page: response.data.standings.page
+      };
+    } catch (error) {
+      console.error(`Error fetching league ${leagueId} standings:`, error.message);
+      throw error;
+    }
+  },
+
+  async searchLeaguePlayer(query, leagueId = config.leagueId) {
+    const data = await this.getLeagueStandings(leagueId);
+    if (!query || !query.trim()) {
+      return { league: data.league, matches: [], totalEntries: data.standings.length, standings: data.standings };
+    }
+
+    const q = query.toLowerCase().trim();
+    const matches = data.standings.filter(entry => {
+      const playerName = (entry.player_name || '').toLowerCase();
+      const entryName = (entry.entry_name || '').toLowerCase();
+      return playerName.includes(q) || entryName.includes(q);
+    });
+
+    return {
+      league: data.league,
+      matches,
+      totalEntries: data.standings.length,
+      standings: data.standings
+    };
   }
 };
+
