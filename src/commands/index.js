@@ -68,21 +68,26 @@ async function handleMessage(client, message) {
   }
 
   // --- 2. Natural language parsing ---
-  if (textLower.includes('help') || textLower.includes('menu') || textLower.includes('commands')) {
+  if (textLower.includes('help') || textLower.includes('menu') || textLower.includes('commands') || textLower.includes('اوامر') || textLower.includes('مساعدة')) {
     await commands['help'].execute(client, message, []);
   }
-  else if (textLower.includes('deadline') || textLower.includes('when')) {
+  else if (textLower.includes('deadline') || textLower.includes('when is the deadline') || textLower.includes('موعد الديدلاين') || textLower.includes('ديدلاين')) {
     await commands['deadline'].execute(client, message, []);
   }
-  else if (textLower.includes('fixture') || textLower.includes('fixtures') || textLower.includes('game') || textLower.includes('match')) {
-    // Strip noise words to isolate the team name
-    const noiseWords = new Set([
-      'fixture', 'fixtures', 'game', 'games', 'match', 'matches',
-      'for', 'show', 'get', 'what', 'are', 'the', 'next', 'upcoming',
-      'of', 'schedule', 'calendar', 'list', 'week', 'gameweek', 'this'
-    ]);
-    const teamWords = textLower.split(/ +/).filter(w => !noiseWords.has(w) && w.length > 0);
-    await commands['fixtures'].execute(client, message, teamWords);
+  else if (textLower.includes('captains') || textLower.includes('chips') || textLower.includes('الكباتن') || textLower.includes('الخواص') || textLower.includes('who captained') || textLower.includes('everyone captain')) {
+    const gwNumber = textLower.match(/\b\d+\b/);
+    const args = gwNumber ? [gwNumber[0]] : [];
+    await commands['captains'].execute(client, message, args);
+  }
+  else if (textLower.includes('best captain') || textLower.includes('captain pick') || textLower.includes('recommend captain') || textLower.includes('who to captain') || textLower.includes('who should i captain') || textLower.includes('من اكبتن') || textLower.includes('كابتن') || textLower.includes('captain')) {
+    const gwNumber = textLower.match(/\b\d+\b/);
+    const args = gwNumber ? [gwNumber[0]] : [];
+    await commands['captain'].execute(client, message, args);
+  }
+  else if (textLower.includes('review') || textLower.includes('awards') || textLower.includes('جوائز') || textLower.includes('ملخص') || textLower.includes('king of the') || textLower.includes('flop') || textLower.includes('bench warmer') || textLower.includes('who won')) {
+    const gwNumber = textLower.match(/\b\d+\b/);
+    const args = gwNumber ? [gwNumber[0]] : [];
+    await commands['review'].execute(client, message, args);
   }
   else if (textLower.includes('rank') || textLower.includes('league') || textLower.includes('standings') || textLower.includes('ترتيب') || textLower.includes('الدوري')) {
     const keywords = new Set([
@@ -92,8 +97,19 @@ async function handleMessage(client, message) {
     const query = textLower.split(/ +/).filter(w => !keywords.has(w) && w.length > 0);
     await commands['league'].execute(client, message, query);
   }
-  else if (textLower.includes('player') || textLower.includes('stats') || textLower.includes('search') || textLower.includes('who is') || textLower.includes("who's")) {
-    const keywords = new Set(['player', 'stats', 'search', 'who', 'is', 'for', 'show', 'details', 'find', "who's"]);
+  else if (/\b(fixtures?|games?|matches?|مباريات|جدول)\b/i.test(textLower)) {
+    // Strip noise words to isolate the team name
+    const noiseWords = new Set([
+      'fixture', 'fixtures', 'game', 'games', 'match', 'matches',
+      'for', 'show', 'get', 'what', 'are', 'the', 'next', 'upcoming',
+      'of', 'schedule', 'calendar', 'list', 'week', 'gameweek', 'this',
+      'مباريات', 'جدول'
+    ]);
+    const teamWords = textLower.split(/ +/).filter(w => !noiseWords.has(w) && w.length > 0);
+    await commands['fixtures'].execute(client, message, teamWords);
+  }
+  else if (textLower.includes('player') || textLower.includes('stats') || textLower.includes('search') || textLower.includes('who is') || textLower.includes("who's") || textLower.includes('لاعب')) {
+    const keywords = new Set(['player', 'stats', 'search', 'who', 'is', 'for', 'show', 'details', 'find', "who's", 'لاعب']);
     const playerQuery = textLower.split(/ +/).filter(w => !keywords.has(w) && w.length > 0);
     await commands['player'].execute(client, message, playerQuery);
   }
@@ -106,9 +122,12 @@ async function handleMessage(client, message) {
       `🤖 *FPL Assistant here!*\n\n` +
       `Ask me naturally or use a command:\n` +
       `• _"when is the deadline?"_\n` +
+      `• _"who to captain?"_ or \`!captain\`\n` +
+      `• _"who did everyone captain?"_ or \`!captains\`\n` +
+      `• _"gameweek review"_ or \`!review\`\n` +
+      `• _"rank for sahl"_ or \`!rank sahl\`\n` +
       `• _"fixtures for Chelsea"_ or \`!fixtures Chelsea\`\n` +
       `• _"stats for Haaland"_ or \`!player Haaland\`\n` +
-      `• _"rank for sahl"_ or \`!rank sahl\`\n` +
       `• \`!league\` — to view league standings\n` +
       `• \`!help\` — to see all commands`
     );
