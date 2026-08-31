@@ -9,6 +9,6 @@ module.exports = {
   dbPath: path.resolve(__dirname, '../data/db.json'),
   authPath: path.resolve(__dirname, '../data/.wwebjs_auth'),
   // The WhatsApp group chat ID that receives all periodic broadcasts
-  targetGroupId: process.env.TARGET_GROUP_ID || '',
+  targetGroupId: process.env.TARGET_GROUP_ID || '120363405152085258@g.us',
   botId: process.env.BOT_ID || ''
 };
