@@ -53,7 +53,6 @@ async function handleMessage(client, message) {
     const args = parts;
 
     const command = commands[commandName];
-    console.log({command})
     if (command) {
       console.log(`[Commands] Executing prefix command "${commandName}"`);
       try {
