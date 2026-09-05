@@ -584,6 +584,258 @@ module.exports = {
       } : null,
       avgGwPoints
     };
+  },
+
+  async getScoutSelection(gwId = null) {
+    const bootstrap = await getBootstrapData();
+    const teamsMap = await getTeamsMap();
+
+    let targetGw = gwId !== null ? parseInt(gwId) : null;
+    let isExplicitGw = gwId !== null;
+
+    if (!targetGw) {
+      const nextGw = await this.getNextGameweek();
+      if (nextGw) {
+        targetGw = nextGw.id;
+      } else {
+        const cur = await this.getCurrentOrLatestGameweek();
+        targetGw = cur ? cur.id : 1;
+      }
+    }
+
+    // Fetch Scout articles list from Premier League API
+    const listUrl = 'https://footballapi.pulselive.com/content/PremierLeague/text/en?pageSize=50&tagNames=content-creator:The-Scout';
+    const response = await axios.get(listUrl, {
+      headers: {
+        'Origin': 'https://www.premierleague.com',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+
+    const scoutArticles = (response.data.content || []).filter(a =>
+      a.title && a.title.toLowerCase().includes('scout selection')
+    );
+
+    if (scoutArticles.length === 0) {
+      return null;
+    }
+
+    // Attach parsed gameweek number to each article
+    const parsedArticles = scoutArticles.map(a => {
+      const gwMatch = a.title.match(/(?:gameweek|gw)\s*(\d+)/i) ||
+                      (a.titleUrlSegment && a.titleUrlSegment.match(/(?:gameweek|gw)-?(\d+)/i));
+      return {
+        ...a,
+        parsedGw: gwMatch ? parseInt(gwMatch[1]) : null
+      };
+    });
+
+    let selectedArticle = null;
+    let isRequestedGwMatch = false;
+
+    if (targetGw) {
+      selectedArticle = parsedArticles.find(a => a.parsedGw === targetGw);
+      if (selectedArticle) {
+        isRequestedGwMatch = true;
+      }
+    }
+
+    // If user explicitly asked for a GW that doesn't exist yet
+    if (!selectedArticle && isExplicitGw) {
+      const latestAvailable = parsedArticles.find(a => a.parsedGw !== null);
+      return {
+        notFound: true,
+        requestedGw: targetGw,
+        latestAvailableGw: latestAvailable ? latestAvailable.parsedGw : null
+      };
+    }
+
+    // If not explicit and targetGw (next GW) is not yet published, fallback to latest published
+    if (!selectedArticle) {
+      selectedArticle = parsedArticles[0];
+      isRequestedGwMatch = false;
+    }
+
+    // Fetch full article detail
+    const detailUrl = `https://footballapi.pulselive.com/content/PremierLeague/text/en/${selectedArticle.id}`;
+    const detailRes = await axios.get(detailUrl, {
+      headers: {
+        'Origin': 'https://www.premierleague.com',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+
+    const articleData = detailRes.data;
+    const html = articleData.body || '';
+
+    // Extract players from <h5>
+    const playerRegex = /<h5>\s*([^<]+?)\s*\(([^)]+)\)\s*£?([\d\.]+)m?\s*<\/h5>(?:[\s\S]*?<p>([\s\S]*?)<\/p>)?/gi;
+    let pMatch;
+    const rawPlayers = [];
+    while ((pMatch = playerRegex.exec(html)) !== null) {
+      rawPlayers.push({
+        name: pMatch[1].trim(),
+        club: pMatch[2].trim(),
+        cost: pMatch[3].trim(),
+        rationale: pMatch[4] ? pMatch[4].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ').trim() : ''
+      });
+    }
+
+    // Extract Captain & Vice-Captain
+    const cleanText = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    let captain = null;
+    let viceCaptain = null;
+
+    const sentences = cleanText.split(/(?<=[.?!])\s+/);
+    const armbandSentence = sentences.find(s => /armband/i.test(s));
+
+    if (armbandSentence) {
+      const capPart = armbandSentence.split(/armband/i)[0];
+      for (const p of rawPlayers) {
+        const lastName = p.name.split(' ').pop();
+        if (capPart.includes(p.name) || capPart.includes(lastName)) {
+          captain = p.name;
+        }
+      }
+
+      const vcPart = armbandSentence.split(/vice-captain/i)[0];
+      if (vcPart) {
+        for (const p of rawPlayers) {
+          if (p.name === captain) continue;
+          const lastName = p.name.split(' ').pop();
+          if (vcPart.includes(p.name) || vcPart.includes(lastName)) {
+            viceCaptain = p.name;
+          }
+        }
+      }
+    }
+
+    // Extract Official Graphic Image URL
+    let graphicImageUrl = null;
+    const mediaIdMatch = html.match(/data-media-id="(\d+)"/i);
+    if (mediaIdMatch) {
+      try {
+        const photoRes = await axios.get(`https://footballapi.pulselive.com/content/PremierLeague/photo/en/${mediaIdMatch[1]}`, {
+          headers: {
+            'Origin': 'https://www.premierleague.com',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          }
+        });
+        if (photoRes.data && photoRes.data.imageUrl) {
+          graphicImageUrl = photoRes.data.imageUrl;
+        }
+      } catch (e) {
+        // Fall back below
+      }
+    }
+    if (!graphicImageUrl && articleData.leadMedia && articleData.leadMedia.imageUrl) {
+      graphicImageUrl = articleData.leadMedia.imageUrl;
+    }
+
+    function cleanStr(s) {
+      if (!s) return '';
+      return s.normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/ø/g, 'o')
+        .replace(/Ø/g, 'O')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    // Cross-reference with bootstrap elements to get position & enriched info
+    const enrichedPlayers = rawPlayers.map(rp => {
+      const cleanName = cleanStr(rp.name);
+      const cleanClub = cleanStr(rp.club);
+      const nameTokens = cleanName.split(' ');
+
+      // Prioritize players belonging to the same club
+      const teamCandidates = bootstrap.elements.filter(el => {
+        const t = teamsMap[el.team];
+        if (!t) return false;
+        const tName = cleanStr(t.name);
+        const tShort = cleanStr(t.short_name);
+        return tName.includes(cleanClub) || cleanClub.includes(tName) || tShort.includes(cleanClub) || cleanClub.includes(tShort);
+      });
+
+      const searchPool = teamCandidates.length > 0 ? teamCandidates : bootstrap.elements;
+
+      let matchedElement = searchPool.find(el => {
+        const elCleanFull = cleanStr(`${el.first_name} ${el.second_name}`);
+        return nameTokens.every(tok => elCleanFull.includes(tok));
+      });
+
+      if (!matchedElement) {
+        matchedElement = searchPool.find(el => {
+          const elCleanWeb = cleanStr(el.web_name);
+          return nameTokens.some(tok => elCleanWeb.includes(tok));
+        });
+      }
+
+      if (!matchedElement && searchPool !== bootstrap.elements) {
+        matchedElement = bootstrap.elements.find(el => {
+          const elCleanFull = cleanStr(`${el.first_name} ${el.second_name}`);
+          return nameTokens.every(tok => elCleanFull.includes(tok));
+        });
+      }
+
+      const teamInfo = matchedElement && teamsMap[matchedElement.team]
+        ? teamsMap[matchedElement.team]
+        : { name: rp.club, short_name: rp.club };
+
+      const isCap = captain && (
+        cleanStr(rp.name).includes(cleanStr(captain)) ||
+        cleanStr(captain).includes(cleanStr(rp.name)) ||
+        (matchedElement && cleanStr(matchedElement.web_name) === cleanStr(captain))
+      );
+      const isVc = viceCaptain && (
+        cleanStr(rp.name).includes(cleanStr(viceCaptain)) ||
+        cleanStr(viceCaptain).includes(cleanStr(rp.name)) ||
+        (matchedElement && cleanStr(matchedElement.web_name) === cleanStr(viceCaptain))
+      );
+
+      return {
+        rawName: rp.name,
+        webName: matchedElement ? matchedElement.web_name : rp.name,
+        fullName: matchedElement ? `${matchedElement.first_name} ${matchedElement.second_name}` : rp.name,
+        club: teamInfo.name,
+        clubShort: teamInfo.short_name,
+        elementType: matchedElement ? matchedElement.element_type : 3,
+        position: POSITION_MAP[matchedElement ? matchedElement.element_type : 3] || 'MID',
+        price: matchedElement ? (matchedElement.now_cost / 10).toFixed(1) : rp.cost,
+        form: matchedElement ? matchedElement.form : '0.0',
+        totalPoints: matchedElement ? matchedElement.total_points : 0,
+        isCaptain: !!isCap,
+        isViceCaptain: !!isVc,
+        rationale: rp.rationale
+      };
+    });
+
+    const squadByPosition = {
+      gkp: enrichedPlayers.filter(p => p.elementType === 1),
+      def: enrichedPlayers.filter(p => p.elementType === 2),
+      mid: enrichedPlayers.filter(p => p.elementType === 3),
+      fwd: enrichedPlayers.filter(p => p.elementType === 4)
+    };
+
+    const detectedGw = selectedArticle.parsedGw || targetGw;
+
+    return {
+      notFound: false,
+      articleId: selectedArticle.id,
+      title: selectedArticle.title,
+      summary: articleData.summary || '',
+      gameweek: detectedGw,
+      requestedGw: targetGw,
+      isRequestedGwMatch,
+      captain: captain || (enrichedPlayers.find(p => p.isCaptain) ? enrichedPlayers.find(p => p.isCaptain).webName : null),
+      viceCaptain: viceCaptain || (enrichedPlayers.find(p => p.isViceCaptain) ? enrichedPlayers.find(p => p.isViceCaptain).webName : null),
+      graphicImageUrl,
+      squad: squadByPosition,
+      allPlayers: enrichedPlayers,
+      articleUrl: `https://www.premierleague.com/en/news/${selectedArticle.id}`
+    };
   }
 };
 

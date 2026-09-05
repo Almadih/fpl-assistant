@@ -16,11 +16,13 @@ module.exports = {
       `• \`${prefix}league\` - View top league standings table.\n` +
       `• \`${prefix}captain\` - Top captain recommendations for upcoming GW.\n` +
       `• \`${prefix}captains\` - Track what everyone captained & chips played.\n` +
+      `• \`${prefix}scouts [gw]\` - Official FPL Scout Selection for the gameweek.\n` +
       `• \`${prefix}review\` - Gameweek awards (King, Flop, Bench, Captain).\n\n` +
       `💬 *Group Mention Support:*\n` +
       `You can also mention/tag the bot in a group chat and ask questions naturally:\n` +
       `- _"@Bot who to captain?"_\n` +
       `- _"@Bot who did everyone captain?"_\n` +
+      `- _"@Bot scout selection"_ / _"@Bot تشكيلة الكشاف"_\n` +
       `- _"@Bot gameweek review"_ / _"@Bot who won this week?"_\n` +
       `- _"@Bot what is the rank of sahl"_\n` +
       `- _"@Bot show fixtures for Chelsea"_\n` +

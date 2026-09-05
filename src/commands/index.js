@@ -53,6 +53,7 @@ async function handleMessage(client, message) {
     const args = parts;
 
     const command = commands[commandName];
+    console.log({command})
     if (command) {
       console.log(`[Commands] Executing prefix command "${commandName}"`);
       try {
@@ -113,6 +114,11 @@ async function handleMessage(client, message) {
     const playerQuery = textLower.split(/ +/).filter(w => !keywords.has(w) && w.length > 0);
     await commands['player'].execute(client, message, playerQuery);
   }
+  else if (textLower.includes('scout') || textLower.includes('scouts') || textLower.includes('الكشاف') || textLower.includes('تشكيلة الكشاف')) {
+    const gwNumber = textLower.match(/\b\d+\b/);
+    const args = gwNumber ? [gwNumber[0]] : [];
+    await commands['scouts'].execute(client, message, args);
+  }
   else if (textLower.includes('chatid') || textLower.includes('chat id') || textLower.includes('group id')) {
     await commands['chatid'].execute(client, message, []);
   }
@@ -124,6 +130,7 @@ async function handleMessage(client, message) {
       `• _"when is the deadline?"_\n` +
       `• _"who to captain?"_ or \`!captain\`\n` +
       `• _"who did everyone captain?"_ or \`!captains\`\n` +
+      `• _"scout selection"_ or \`!scouts\`\n` +
       `• _"gameweek review"_ or \`!review\`\n` +
       `• _"rank for sahl"_ or \`!rank sahl\`\n` +
       `• _"fixtures for Chelsea"_ or \`!fixtures Chelsea\`\n` +
